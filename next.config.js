@@ -96,6 +96,5 @@ module.exports = () => {
 
       return config
     },
-    output : 'export'
   })
 }
