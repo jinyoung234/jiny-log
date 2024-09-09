@@ -1,0 +1,251 @@
+---
+title: '토큰 기반 인증 및 자동 갱신 구현 하기'
+date: '2024-07-12'
+tags: ['woowacourse', 'touroot', 'UX 개선']
+draft: false
+summary: Axios Interceptor를 활용한 방법 소개 및 이를 통해 어떤 사용자 경험을 개선했는지에 대한 기록
+---
+
+# Intro
+
+투룻의 경우, `토큰 기반 인증 & 인가 방식`을 채택하여 서비스를 구성했다.
+
+해당 방식을 통해 우리가 해결하고자 했던 문제는 아래와 같다.
+
+1. 인증 된 사용자만 여행 계획 생성 및 조회 가능
+2. 일정 시간이 지났을 때 로그인 갱신
+
+왜 토큰 기반 인증 & 인가 방식을 채택했는지, 위 문제 들을 어떻게 해결했는지에 대해 상세히 기술하고자 이 글을 작성하게 되었다.
+
+# 인증 & 인가
+
+토큰 기반 인증 & 인가 방식을 채택한 이유를 살펴보기 전 인증과 인가에 대해 먼저 살펴볼 필요가 있다.
+
+## 인증
+
+> 서비스에 등록된 유저의 신원을 입증하는 과정
+
+인증의 대표적인 예시는 `회원가입 & 로그인`이다. 투룻의 경우 `카카오 로그인`을 하는 것 자체가 인증 과정이라고 볼 수 있다.
+
+## 인가
+
+> 인증된 사용자가 어떠한 자원에 접근할 수 있는지 확인하는 절차
+
+`자원`이라고 한다면, 서비스에서 부여 받은 권한과 비슷하다고 생각할 수 있다.
+
+투룻에서 제공하는 권한은 아래와 같다.
+
+1. 마이페이지 접근
+2. 여행 계획 상세 페이지 접근
+3. 여행기 썸네일 & 이미지 업로드
+4. 여행 계획 & 여행기 등록
+
+## 토큰 기반 인증 & 인가 방식
+
+> 사용자의 인증 정보를 클라이언트에서 저장하는 방식
+
+<div>
+  <img src="https://private-user-images.githubusercontent.com/87177577/365513497-01e7aed2-3101-496b-bad8-6ffda71bdcfd.png?jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTUiLCJleHAiOjE3MjU4NTY5NzQsIm5iZiI6MTcyNTg1NjY3NCwicGF0aCI6Ii84NzE3NzU3Ny8zNjU1MTM0OTctMDFlN2FlZDItMzEwMS00OTZiLWJhZDgtNmZmZGE3MWJkY2ZkLnBuZz9YLUFtei1BbGdvcml0aG09QVdTNC1ITUFDLVNIQTI1NiZYLUFtei1DcmVkZW50aWFsPUFLSUFWQ09EWUxTQTUzUFFLNFpBJTJGMjAyNDA5MDklMkZ1cy1lYXN0LTElMkZzMyUyRmF3czRfcmVxdWVzdCZYLUFtei1EYXRlPTIwMjQwOTA5VDA0Mzc1NFomWC1BbXotRXhwaXJlcz0zMDAmWC1BbXotU2lnbmF0dXJlPWQ0OTY5MjU3M2ExMDBiYWEyMzdjYTE2ZTNhZTJhZmZhYmUwZTZkZTM0OTMyZTQyZjhkYTZlNWFlYThmZDExNTImWC1BbXotU2lnbmVkSGVhZGVycz1ob3N0JmFjdG9yX2lkPTAma2V5X2lkPTAmcmVwb19pZD0wIn0.AheV85_OGikG5PLHW9ab_IDytOed5hGnmAYptyCVrJs" />
+</div>
+
+### 순서
+
+1. 유저가 서비스 내에서 로그인을 한다.
+2. 로그인 요청을 받으면, 서버에서 유저 정보를 확인 후 일치할 경우 토큰을 발급한다.
+3. 클라이언트에게 토큰을 반환한다.
+4. 클라이언트는 받은 토큰들을 브라우저에 저장한다.
+5. 저장한 토큰을 기반으로 서버에 api 요청을 한다.
+6. 서버는 사용자 인증 후 특정 요청에 대한 response를 내려준다.
+
+## 토큰 기반 인증 & 인가 방식을 택한 이유
+
+토큰 기반 방식 이외 2가지 선택지(basic 인증, 세션)가 있었지만 아래와 같은 이유로 토큰 기반 방식을 채택했다.
+
+1. basic 인증 방식의 경우 매 요청 마다 base64로 인코딩 된 사용자 정보(사용자 이름, 비밀번호)가 쉽게 디코딩 될 수 있다.
+2. 세션 기반 방식의 경우 많은 사용자의 세션을 관리하므로 서버 리소스 사용량이 증가할 수 있다.
+
+토큰 기반 방식의 경우, secret key를 서버에 위치시키면 서버가 증가하더라도 동일하게 인증이 가능하며, 사용자 정보를 저장하지 않는 stateless한 방식이라 서버 부하를 줄일 수 있다.
+
+또한, 토큰 만료 기간을 짧게 설정한다면 디코딩 되는 문제도 어느 정도 해결이 가능하다.
+
+위와 같은 이유로 토큰 기반 인증 & 인가 방식을 택하게 되었다.
+
+크게 token은 access token과 refresh token으로 나눌 수 있다.
+
+- **`access token`**
+  - 사용자 인증을 위한 토큰
+- **`refresh token`**
+  - access token 만료 시 재발급 요청을 위한 토큰
+
+즉, access token은 서비스에 접근하기 위한 토큰이며, refresh token의 경우 새로운 access token을 발급받기 위한 토큰으로 각각의 사용 목적이 다르다.
+
+# Axios Interceptor를 활용한 인증 & 인가 구현
+
+우리팀의 경우 Axios Interceptor를 활용해서 해당 기능을 구현하게 되었다.
+
+그렇다면 Axios Interceptor가 무엇일까?
+
+## Axios Interceptor
+
+> http request ~ response 요청을 가로채어 특정 기능을 핸들링 할 수 있는 기능
+
+즉, 2가지 case에 대한 요청을 가로챌 수 있다.
+
+1. api request 전(axios.interceptors.request)
+2. api response 이후(axios.interceptors.response)
+
+```tsx
+// example
+
+// api request 전
+authClient.interceptors.request.use(handlePreviousRequest, handleAPIError)
+// api response 후
+authClient.interceptors.response.use((response) => response, handleAPIError)
+```
+
+다음과 같이 axios 인스턴스에 대해 `interceptors.request(response).use`를 통해 2가지 case들에 대한 요청을 가로챌 수 있다.
+
+### api request 전
+
+api request 전 `handlePreviousRequest`라는 핸들러 함수를 실행하는 것을 알 수 있다.
+
+```tsx
+// interceptor.ts
+export const handlePreviousRequest = (config: InternalAxiosRequestConfig) => {
+  const user: UserResponse | null = JSON.parse(localStorage.getItem(STORAGE_KEYS_MAP.user) ?? '{}')
+  let newConfig = { ...config }
+
+  newConfig = checkAccessToken(config, user?.accessToken ?? null)
+  newConfig = setAuthorizationHeader(config, user?.accessToken ?? '')
+
+  return newConfig
+}
+```
+
+`handlePreviousRequest`는 크게 2가지 역할을 수행한다.
+
+1. request header 내 Authorization에 access token 추가
+
+그렇다면 왜 Authorization 속성에 access token을 추가해야할까?
+
+<img src="https://private-user-images.githubusercontent.com/87177577/365517948-bfc83abc-2299-435e-8119-2d15fa52aa09.png?jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTUiLCJleHAiOjE3MjU4NTg1OTMsIm5iZiI6MTcyNTg1ODI5MywicGF0aCI6Ii84NzE3NzU3Ny8zNjU1MTc5NDgtYmZjODNhYmMtMjI5OS00MzVlLTgxMTktMmQxNWZhNTJhYTA5LnBuZz9YLUFtei1BbGdvcml0aG09QVdTNC1ITUFDLVNIQTI1NiZYLUFtei1DcmVkZW50aWFsPUFLSUFWQ09EWUxTQTUzUFFLNFpBJTJGMjAyNDA5MDklMkZ1cy1lYXN0LTElMkZzMyUyRmF3czRfcmVxdWVzdCZYLUFtei1EYXRlPTIwMjQwOTA5VDA1MDQ1M1omWC1BbXotRXhwaXJlcz0zMDAmWC1BbXotU2lnbmF0dXJlPTA1ODNhZDlmNmY2MTgwODUxZDAyNmVhMjI5ZTk1MzA1YjA3NDgxYjhiZjgwZmExZDgzMDE5Y2Y5NmE1YTQwNzcmWC1BbXotU2lnbmVkSGVhZGVycz1ob3N0JmFjdG9yX2lkPTAma2V5X2lkPTAmcmVwb19pZD0wIn0._K0KJHnd4oosGpHDF73ng6wDQFeY0rH5RLcK8dh8nlw" />
+
+<img src="https://private-user-images.githubusercontent.com/87177577/365520762-fa1c96f1-3978-4de8-830c-4c1f4394fc38.png?jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTUiLCJleHAiOjE3MjU4NTk1NDYsIm5iZiI6MTcyNTg1OTI0NiwicGF0aCI6Ii84NzE3NzU3Ny8zNjU1MjA3NjItZmExYzk2ZjEtMzk3OC00ZGU4LTgzMGMtNGMxZjQzOTRmYzM4LnBuZz9YLUFtei1BbGdvcml0aG09QVdTNC1ITUFDLVNIQTI1NiZYLUFtei1DcmVkZW50aWFsPUFLSUFWQ09EWUxTQTUzUFFLNFpBJTJGMjAyNDA5MDklMkZ1cy1lYXN0LTElMkZzMyUyRmF3czRfcmVxdWVzdCZYLUFtei1EYXRlPTIwMjQwOTA5VDA1MjA0NlomWC1BbXotRXhwaXJlcz0zMDAmWC1BbXotU2lnbmF0dXJlPWI5Njc3Y2UzOTZkNTA4YTljZDE1ZjVjZjQyOWQ5NjI0ODc1OWUyYjYwNzU1ZjY1OTIzMjUzYzJhMmM3MmRhYmQmWC1BbXotU2lnbmVkSGVhZGVycz1ob3N0JmFjdG9yX2lkPTAma2V5X2lkPTAmcmVwb19pZD0wIn0.7sDJER7HSPTY_vUkeHB3oYR1YOwNa8odDGG0SVETE0k" />
+
+위와 같이 authorization header 내 access token 없이 요청을 날리게 되면 서버 측에서 `인가되지 않은 사용자`라고 인식하여 다음과 같이 `401 Unauthorized error`를 발생시킨다.
+
+```tsx
+export const setAuthorizationHeader = (
+  config: InternalAxiosRequestConfig,
+  accessToken: string | null
+) => {
+  if (!config.headers || config.headers.Authorization || !accessToken) return config
+
+  config.headers.Authorization = `Bearer ${accessToken}`
+
+  return config
+}
+```
+
+즉, `사용자의 권한 여부를 확인하기 위한 수단`으로써 access token을 활용하는 것을 알 수 있다.
+
+2. access token이 있는지 검증
+
+```tsx
+export const checkAccessToken = (
+  config: InternalAxiosRequestConfig,
+  accessToken: string | null
+) => {
+  if (!accessToken) {
+    alert(ERROR_MESSAGE_MAP.api.login)
+    window.location.href = ROUTE_PATHS_MAP.login
+  }
+
+  return config
+}
+```
+
+유저의 access token이 없다면 login 페이지로 리다이렉팅을 하게 된다.
+
+<img src="https://private-user-images.githubusercontent.com/87177577/365522984-55ef3250-3369-4dd8-bf4e-91dccc3b2661.png?jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTUiLCJleHAiOjE3MjU4NjAyNjMsIm5iZiI6MTcyNTg1OTk2MywicGF0aCI6Ii84NzE3NzU3Ny8zNjU1MjI5ODQtNTVlZjMyNTAtMzM2OS00ZGQ4LWJmNGUtOTFkY2NjM2IyNjYxLnBuZz9YLUFtei1BbGdvcml0aG09QVdTNC1ITUFDLVNIQTI1NiZYLUFtei1DcmVkZW50aWFsPUFLSUFWQ09EWUxTQTUzUFFLNFpBJTJGMjAyNDA5MDklMkZ1cy1lYXN0LTElMkZzMyUyRmF3czRfcmVxdWVzdCZYLUFtei1EYXRlPTIwMjQwOTA5VDA1MzI0M1omWC1BbXotRXhwaXJlcz0zMDAmWC1BbXotU2lnbmF0dXJlPTIzM2I1MGJjOTEzYTA2YzhkYjg5OTE1YTE3ZjE5NmU2Y2U0NmNjODVlYjk4NDUxNTMyNGQ3Yjg5YmY5M2E1MzUmWC1BbXotU2lnbmVkSGVhZGVycz1ob3N0JmFjdG9yX2lkPTAma2V5X2lkPTAmcmVwb19pZD0wIn0.HurdUln7Dr_l6jAs1xEbXKS7M6B0v22xSTClv3KcB5Y" />
+
+한번 access token을 제거해서 확인해보자.
+
+![after](/static/blogs/d/axios-after.gif)
+
+로그인 alert가 등장 후 로그인 페이지로 리다이렉팅 되는 것을 알 수 있다.
+
+### api response 후
+
+해당 phase의 대표적인 task로 `토큰 만료 처리`가 있다.
+
+우리 팀의 경우 토큰 탈취의 위험성을 최대한 방지하기 위해 access token 만료 기간은 30분으로 잡아둔 상태이다.
+
+이 경우, 30분 마다 토큰 만료로 인해 다시 로그인 페이지로 리다이렉팅되어 로그인을 해야하는 상황이 발생하게되어 사용자 경험이 좋지 않게 된다.
+
+<img src="https://private-user-images.githubusercontent.com/87177577/365632674-0b36c9eb-acd7-4761-a3c7-3ed152bdb54d.png?jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTUiLCJleHAiOjE3MjU4ODE4MzksIm5iZiI6MTcyNTg4MTUzOSwicGF0aCI6Ii84NzE3NzU3Ny8zNjU2MzI2NzQtMGIzNmM5ZWItYWNkNy00NzYxLWEzYzctM2VkMTUyYmRiNTRkLnBuZz9YLUFtei1BbGdvcml0aG09QVdTNC1ITUFDLVNIQTI1NiZYLUFtei1DcmVkZW50aWFsPUFLSUFWQ09EWUxTQTUzUFFLNFpBJTJGMjAyNDA5MDklMkZ1cy1lYXN0LTElMkZzMyUyRmF3czRfcmVxdWVzdCZYLUFtei1EYXRlPTIwMjQwOTA5VDExMzIxOVomWC1BbXotRXhwaXJlcz0zMDAmWC1BbXotU2lnbmF0dXJlPTE2MzA4NDQyNDI4MDJlM2I1YzczNzg4ZTE0ZWJkYWUyOTk0YzYzOTFmMWRhNTM3YmQ2MGQzYTAwMDk2YWVhNjkmWC1BbXotU2lnbmVkSGVhZGVycz1ob3N0JmFjdG9yX2lkPTAma2V5X2lkPTAmcmVwb19pZD0wIn0.ybR_2UTkbwF9hu5EOv6YXV5UFIX8eFzuVDBKj93LQNw" />
+
+이를 위해 위와 같이 refresh token을 활용하여 사용자 경험을 높여줄 수 있다.
+
+서버에서 401 토큰 만료 에러를 발생시키면, access token 재요청을 보내게 된다.
+
+이 때, refresh token을 Authorization 헤더에 담아 요청을 보내게 되는데,
+서버는 access token을 확인하듯 refresh token을 확인하여 만료되었다면 다시 유저 정보를, 그렇지 않다면 에러를 내려주어 클라이언트에서 처리된다.
+
+코드를 통해선 아래와 같이 나타낼 수 있다.
+
+```tsx
+export const handleAPIError = async (error: AxiosError<ErrorResponse>) => {
+  // 1. status code가 401이고, 토큰 만료 메시지를 받았다면
+  if (
+    error.response?.status === HTTP_STATUS_CODE_MAP.UNAUTHORIZED &&
+    error.response.data.message === ERROR_MESSAGE_MAP.api.expiredToken
+  ) {
+    try {
+      // 2. storage에서 user 데이터를 가져와서
+      const user: UserResponse | null = JSON.parse(
+        localStorage.getItem(STORAGE_KEYS_MAP.user) ?? '{}'
+      )
+
+      // 3. axios instance의 baseUrl를 BASE_URL로 설정하고
+      axios.defaults.baseURL = process.env.REACT_APP_BASE_URL
+
+      // 4. 스토리지에 있는 refresh token을 받아와서 서버 측에 토큰 재발행 요청
+      const response: AxiosResponse<AuthTokenResponse> = await axios.post(
+        API_ENDPOINT_MAP.reissueToken,
+        { refreshToken: user?.refreshToken }
+      )
+
+      // 5. 받아온 요청을 기반으로
+      const { accessToken, refreshToken, memberId } = response.data
+
+      // 6. 다시 Storage에 저장
+      localStorage.setItem(
+        STORAGE_KEYS_MAP.user,
+        JSON.stringify({ memberId, accessToken, refreshToken })
+      )
+
+      if (error.config && error.config.headers) {
+        // 7. 다시 refresh된 token을 기반으로 다시 재요청
+        error.config.headers.Authorization = `Bearer ${accessToken}`
+        return axios.request(error.config)
+      }
+    } catch (refreshTokenError) {
+      // 8. 만약 refresh token도 만료되었다면 재로그인
+      handleUserLogout()
+    }
+  }
+}
+```
+
+**refresh token이 만료된 경우**
+
+<img src="https://private-user-images.githubusercontent.com/87177577/365635347-3648e987-f1e3-4a54-8e85-b00111f0d17e.png?jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTUiLCJleHAiOjE3MjU4ODI0ODcsIm5iZiI6MTcyNTg4MjE4NywicGF0aCI6Ii84NzE3NzU3Ny8zNjU2MzUzNDctMzY0OGU5ODctZjFlMy00YTU0LThlODUtYjAwMTExZjBkMTdlLnBuZz9YLUFtei1BbGdvcml0aG09QVdTNC1ITUFDLVNIQTI1NiZYLUFtei1DcmVkZW50aWFsPUFLSUFWQ09EWUxTQTUzUFFLNFpBJTJGMjAyNDA5MDklMkZ1cy1lYXN0LTElMkZzMyUyRmF3czRfcmVxdWVzdCZYLUFtei1EYXRlPTIwMjQwOTA5VDExNDMwN1omWC1BbXotRXhwaXJlcz0zMDAmWC1BbXotU2lnbmF0dXJlPTEzYTgzNjIxOTRhZjU1Mjc1ZDgwN2Q4MjNmODY4MGFjOWJhMTBjZjA0NjJiN2RjYWU2MmY5MWM3MTQ4ZTRlYTMmWC1BbXotU2lnbmVkSGVhZGVycz1ob3N0JmFjdG9yX2lkPTAma2V5X2lkPTAmcmVwb19pZD0wIn0.5rc0p7PAK-ew1aVp0DrKhRo55_58mrQ9rnduxVCaXOA" />
+
+**refresh token이 만료되지 않은 경우**
+
+<img src="https://private-user-images.githubusercontent.com/87177577/365635881-b9ee5069-f1c4-40d7-acbd-dafa493f4237.png?jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTUiLCJleHAiOjE3MjU4ODI0ODcsIm5iZiI6MTcyNTg4MjE4NywicGF0aCI6Ii84NzE3NzU3Ny8zNjU2MzU4ODEtYjllZTUwNjktZjFjNC00MGQ3LWFjYmQtZGFmYTQ5M2Y0MjM3LnBuZz9YLUFtei1BbGdvcml0aG09QVdTNC1ITUFDLVNIQTI1NiZYLUFtei1DcmVkZW50aWFsPUFLSUFWQ09EWUxTQTUzUFFLNFpBJTJGMjAyNDA5MDklMkZ1cy1lYXN0LTElMkZzMyUyRmF3czRfcmVxdWVzdCZYLUFtei1EYXRlPTIwMjQwOTA5VDExNDMwN1omWC1BbXotRXhwaXJlcz0zMDAmWC1BbXotU2lnbmF0dXJlPWU4YThhNzYxYzk1YWE4YjYxODk0ZGQ4NGJiZjAwNzUyZjYwMjFlZGE4MWNjZDdhNWNkYzc1MGU5Mjc2NTJkYjMmWC1BbXotU2lnbmVkSGVhZGVycz1ob3N0JmFjdG9yX2lkPTAma2V5X2lkPTAmcmVwb19pZD0wIn0.de0NFiCyPEGU21T8rJg-huY7XClFqa13mmj_wgGidbA" />
+
+refresh token까지 만료되어버리면 위와 같이 두번 에러가 발생하는 것을 확인할 수 있는 반면, refresh token이 만료되지 않았다면 reissue token 요청을 통해 토큰을 받아와 다시 요청을 보내는 것을 알 수 있다.
+
+이를 통해 유저가 다시 로그인을 하지 않아도 되기 때문에 사용자 경험이 개선 되는 것을 알 수 있다.
