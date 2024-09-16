@@ -3,7 +3,7 @@ const siteMetadata = {
   title: 'jiny-log',
   author: 'jiny',
   headerTitle: 'jinylog',
-  description: '좋은 제품을 만들기 위해 고민하는 개발자 jiny 입니다.',
+  description: '"같이"의 가치를 중시하는 개발자 jiny 입니다.',
   language: 'en-us',
   theme: 'system', // system, dark or light
   siteUrl: 'https://jinyoung234.github.io/jiny-log',
