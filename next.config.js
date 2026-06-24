@@ -54,13 +54,15 @@ const securityHeaders = [
   },
 ]
 
+const isProd = process.env.NODE_ENV === 'production'
+
 /**
  * @type {import('next/dist/next-server/server/config').NextConfig}
  **/
 module.exports = () => {
   const plugins = [withContentlayer, withBundleAnalyzer]
   return plugins.reduce((acc, next) => next(acc), {
-    basePath: process.env.BASE_PATH || undefined,
+    basePath: isProd ? '/jiny-log' : '',
     output: 'export',
     reactStrictMode: true,
     pageExtensions: ['ts', 'tsx', 'js', 'jsx', 'md', 'mdx'],
