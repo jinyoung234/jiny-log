@@ -1,5 +1,8 @@
+// @ts-ignore
 import 'css/tailwind.css'
+// @ts-ignore
 import 'pliny/search/algolia.css'
+// @ts-ignore
 import 'remark-github-blockquote-alert/alert.css'
 
 import { Space_Grotesk } from 'next/font/google'
